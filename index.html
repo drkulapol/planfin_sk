@@ -71,7 +71,9 @@ td.code{color:var(--ink-3);font-size:13px}
 .pill.bad{background:var(--bad-bg);color:var(--bad)}
 .pill.warn{background:var(--warn-bg);color:var(--warn)}
 .pill.na{background:var(--na-bg);color:var(--na)}
-.prog{position:relative;width:150px;height:10px;background:var(--line-2);border-radius:5px;display:inline-block;vertical-align:middle}
+.side td.l:first-child{white-space:normal;min-width:140px}
+.side th,.side td{padding:6px 6px}
+.prog{position:relative;width:96px;height:10px;background:var(--line-2);border-radius:5px;display:inline-block;vertical-align:middle}
 .prog i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--actual)}
 .prog b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
 .prog.over i{background:var(--actual)}
@@ -121,8 +123,8 @@ footer a{color:var(--brand)}
   <section id="v-overview">
     <div class="kpis" id="kpis"></div>
     <div class="grid2">
-      <div class="card"><h2>รายได้ รายหมวด: ผลสะสม เทียบแผนสะสม</h2><p class="note">แถบสีน้ำเงิน = ผลสะสม (% ของแผนสะสม) · เส้นดำ = 100% ของแผนสะสม · คลิกแถวเพื่อดูรายบัญชี</p><div class="tw" id="tblRev"></div></div>
-      <div class="card"><h2>ค่าใช้จ่าย รายหมวด: ผลสะสม เทียบแผนสะสม</h2><p class="note">แถบสีน้ำเงิน = ผลสะสม (% ของแผนสะสม) · เส้นดำ = 100% ของแผนสะสม · คลิกแถวเพื่อดูรายบัญชี</p><div class="tw" id="tblExp"></div></div>
+      <div class="card"><h2>รายได้ รายหมวด: ผลสะสม เทียบแผนสะสม</h2><p class="note">ผลต่างจากเป้า = (ผลสะสม − แผนสะสม) ÷ แผนสะสม · น้ำเงิน = ดีกว่าเป้า, แดง = ด้อยกว่าเป้าเกินเกณฑ์ · คลิกแถวเพื่อดูรายบัญชี</p><div class="tw" id="tblRev"></div></div>
+      <div class="card"><h2>ค่าใช้จ่าย รายหมวด: ผลสะสม เทียบแผนสะสม</h2><p class="note">ผลต่างจากเป้า = (ผลสะสม − แผนสะสม) ÷ แผนสะสม · น้ำเงิน = ดีกว่าเป้า, แดง = ด้อยกว่าเป้าเกินเกณฑ์ · คลิกแถวเพื่อดูรายบัญชี</p><div class="tw" id="tblExp"></div></div>
     </div>
     <div class="card"><h2>ตารางสรุปมุมมองรวม (P04 – P29)</h2><p class="note" id="sumNote"></p>
       <div style="margin-bottom:8px"><button class="btn" data-copy="tblAll">คัดลอกตาราง</button></div>
@@ -208,6 +210,18 @@ const fmt2=v=>v.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionD
 const fmtM=v=>(v/1e6).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
 const pct=v=>(v==null||!isFinite(v))?'–':(v*100).toLocaleString('th-TH',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function dvp(planY,act,kind){
+  if(Math.abs(planY)<0.005) return Math.abs(act)<0.005?'<span class="small">–</span>':'<span class="small">ไม่มีเป้า</span>';
+  const d=(act-planY)/Math.abs(planY), th=st.th/100;
+  const fav=(kind==='exp'||kind==='sumexp')?-d:d;
+  const col=Math.abs(d)<=th?'':(fav>0?' style="color:var(--better);font-weight:600"':' style="color:var(--bad);font-weight:600"');
+  return `<span${col}>${d>=0?'+':''}${(d*100).toLocaleString('th-TH',{minimumFractionDigits:1,maximumFractionDigits:1})}%</span>`;
+}
+function dvc(c,kind){
+  if(!c.exclP04) return dvp(c.planYTD,c.act,kind);
+  const d=Math.abs(c.planYTD)<0.005?null:(c.act-c.planYTD)/Math.abs(c.planYTD);
+  return `<span>${d==null?'–':(d>=0?'+':'')+(d*100).toLocaleString('th-TH',{minimumFractionDigits:1,maximumFractionDigits:1})+'%'}</span><div class="small" style="font-weight:500">ไม่รวม P04: ${dvp(c.evalPlan,c.evalAct,kind)}</div>`;
+}
 const numCls=v=>v<-0.005?' class="neg"':'';
 
 /* ---------- model ---------- */
@@ -292,28 +306,28 @@ function kpiCard(code,title,isNet){
   return `<div class="kpi"><div class="t">${title} <span class="small">(${code})</span></div>
    <div class="v">${fmtM(c.act)} <span class="u">ล้านบาท</span></div>
    <div class="m">แผนสะสม ${fmtM(c.planYTD)} · แผนทั้งปี ${fmtM(c.plan)} ล้านบาท</div>
-   <div class="row"><span class="m">ผลต่าง ${diff>=0?'+':''}${fmtM(diff)} ล้าน ${isNet?'':'· '+pct(c.planYTD?c.act/c.planYTD:null)+' ของแผนสะสม'}</span>${pill(c)}</div>
+   <div class="row"><span class="m">ผลต่าง ${diff>=0?'+':''}${fmtM(diff)} ล้าน (${dvp(c.planYTD,c.act,CAT[code].kind)})</span>${pill(c)}</div>
    ${c.exclP04?`<div class="small" style="margin-top:4px">สถานะประเมินโดยไม่รวม P04: ผล ${fmtM(c.evalAct)} / แผนสะสม ${fmtM(c.evalPlan)} ล้าน (${c.dev==null?'–':(c.dev>=0?'+':'')+pct(c.dev)})</div>`:''}</div>`;
 }
 function renderOverview(){
   $('kpis').innerHTML=kpiCard('P13S','รวมรายได้')+kpiCard('P26S','รวมค่าใช้จ่าย')+kpiCard('P27S','รายได้สูง (ต่ำ) กว่าค่าใช้จ่าย',true)+kpiCard('P29','EBITDA',true);
   const side=(codes,tot)=>{
-    let h=`<table><thead><tr><th class="l">หมวด</th><th>แผนสะสม</th><th>ผลสะสม</th><th>% แผนสะสม</th><th class="l">ผลเทียบแผน</th><th class="l">สถานะ</th></tr></thead><tbody>`;
+    let h=`<table class="side"><thead><tr><th class="l">หมวด</th><th>แผนสะสม</th><th>ผลสะสม</th><th>ผลต่างจากเป้า</th><th class="l">สถานะ</th></tr></thead><tbody>`;
     codes.forEach(k=>{const c=M.C[k];
-      h+=`<tr class="click" data-cat="${k}"><td class="l"><span class="code">${k}</span> ${esc(CAT[k].name)}</td><td>${fmt(c.planYTD)}</td><td${numCls(c.act)}>${fmt(c.act)}</td><td>${pct(c.planYTD?c.act/c.planYTD:null)}</td><td class="l">${prog(c.planYTD,c.act)}</td><td class="l">${pill(c)}</td></tr>`;});
+      h+=`<tr class="click" data-cat="${k}"><td class="l"><span class="code">${k}</span> ${esc(CAT[k].name)}</td><td>${fmt(c.planYTD)}</td><td${numCls(c.act)}>${fmt(c.act)}</td><td>${dvp(c.planYTD,c.act,CAT[k].kind)}</td><td class="l">${pill(c)}</td></tr>`;});
     const c=M.C[tot];
-    h+=`<tr class="grand"><td class="l">${esc(CAT[tot].name)}</td><td>${fmt(c.planYTD)}</td><td>${fmt(c.act)}</td><td>${pct(c.planYTD?c.act/c.planYTD:null)}</td><td class="l">${prog(c.planYTD,c.act)}</td><td class="l">${pill(c)}</td></tr></tbody></table>`;
+    h+=`<tr class="grand"><td class="l">${esc(CAT[tot].name)}</td><td>${fmt(c.planYTD)}</td><td>${fmt(c.act)}</td><td>${dvc(c,CAT[tot].kind)}</td><td class="l">${pill(c)}</td></tr></tbody></table>`;
     return h;
   };
   $('tblRev').innerHTML=side(REV,'P13S');
   $('tblExp').innerHTML=side(EXP,'P26S');
   // full summary
-  let h=`<table><thead><tr><th class="l">รหัสรายการ</th><th class="l">รายการ</th><th>แผนทั้งปี</th><th>แผนสะสม</th><th>ผลสะสม</th><th>ผลต่าง (ผล−แผนสะสม)</th><th>% ของแผนสะสม</th><th>% ของแผนทั้งปี</th><th class="l">สถานะ</th></tr></thead><tbody>`;
+  let h=`<table><thead><tr><th class="l">รหัสรายการ</th><th class="l">รายการ</th><th>แผนทั้งปี</th><th>แผนสะสม</th><th>ผลสะสม</th><th>ผลต่าง (บาท)</th><th>ผลต่างจากเป้าสะสม (%)</th><th>% ของแผนทั้งปี</th><th class="l">สถานะ</th></tr></thead><tbody>`;
   CATS.forEach(([k,n,kind])=>{const c=M.C[k];const cls=(kind==='sumrev'||kind==='sumexp')?'tot':(kind==='net'?'grand':'click');
-    h+=`<tr class="${cls}" ${cls==='click'?`data-cat="${k}"`:''}><td class="l code">${k}</td><td class="l name">${esc(n)}</td><td${numCls(c.plan)}>${fmt(c.plan)}</td><td${numCls(c.planYTD)}>${fmt(c.planYTD)}</td><td${numCls(c.act)}>${fmt(c.act)}</td><td${numCls(c.act-c.planYTD)}>${fmt(c.act-c.planYTD)}</td><td>${(kind==='net')?'–':pct(c.planYTD?c.act/c.planYTD:null)}</td><td>${(kind==='net')?'–':pct(c.plan?c.act/c.plan:null)}</td><td class="l">${pill(c)}</td></tr>`;});
+    h+=`<tr class="${cls}" ${cls==='click'?`data-cat="${k}"`:''}><td class="l code">${k}</td><td class="l name">${esc(n)}</td><td${numCls(c.plan)}>${fmt(c.plan)}</td><td${numCls(c.planYTD)}>${fmt(c.planYTD)}</td><td${numCls(c.act)}>${fmt(c.act)}</td><td${numCls(c.act-c.planYTD)}>${fmt(c.act-c.planYTD)}</td><td>${dvc(c,kind)}</td><td>${(kind==='net')?'–':pct(c.plan?c.act/c.plan:null)}</td><td class="l">${pill(c)}</td></tr>`;});
   h+='</tbody></table>';
   $('tblAll').innerHTML=h;
-  $('sumNote').innerHTML=`เกณฑ์: ผลต่างจากแผนสะสมไม่เกิน ±${st.th}% = ตามแผน · รายได้ต่ำกว่า −${st.th}% หรือค่าใช้จ่ายเกิน +${st.th}% = ไม่ผ่าน (สีแดง) · P27S/P29 ประเมินแบบรายได้ (ยิ่งสูงยิ่งดี)${(st.p04&&st.month<11)?' · เดือน 1–11 ไม่ประเมิน P04 และสถานะของรวมรายได้/P27S/P29 คำนวณโดยไม่รวม P04 (ตัวเลขที่แสดงยังรวม P04)':''}<br>P29-R = P13S − P121 − P13 · P29-E = P26S − P24 − P251 · P29 (EBITDA) = P29-R − P29-E`;
+  $('sumNote').innerHTML=`ผลต่างจากเป้า (%) = (ผลสะสม − แผนสะสม) ÷ แผนสะสม เช่น เป้า 100 ได้ 120 = +20%, ได้ 90 = −10% · สีน้ำเงิน = ดีกว่าเป้า, สีแดง = ด้อยกว่าเป้า (เกินเกณฑ์)<br>เกณฑ์: ผลต่างจากแผนสะสมไม่เกิน ±${st.th}% = ตามแผน · รายได้ต่ำกว่า −${st.th}% หรือค่าใช้จ่ายเกิน +${st.th}% = ไม่ผ่าน (สีแดง) · P27S/P29 ประเมินแบบรายได้ (ยิ่งสูงยิ่งดี)${(st.p04&&st.month<11)?' · เดือน 1–11 ไม่ประเมิน P04 และสถานะของรวมรายได้/P27S/P29 คำนวณโดยไม่รวม P04 (ตัวเลขที่แสดงยังรวม P04)':''}<br>P29-R = P13S − P121 − P13 · P29-E = P26S − P24 − P251 · P29 (EBITDA) = P29-R − P29-E`;
 }
 function catOptions(){
   const sel=$('selCat');const cur=st.cat;
@@ -335,16 +349,16 @@ function renderLines(){
     if(q&&!(L.acc.toLowerCase().includes(q)||L.name.toLowerCase().includes(q)||L.p.toLowerCase().includes(q))) return false;
     return true;
   });
-  const keyf={acc:L=>L.acc,name:L=>L.name,p:L=>L.p,plan:L=>L.plan,planYTD:L=>L.planYTD,act:L=>L.act,mon:L=>L.act-L.prev,diff:L=>L.act-L.planYTD,pc:L=>L.planYTD?L.act/L.planYTD:-1e9,dev:L=>L.dev??-1e9};
+  const keyf={acc:L=>L.acc,name:L=>L.name,p:L=>L.p,plan:L=>L.plan,planYTD:L=>L.planYTD,act:L=>L.act,mon:L=>L.act-L.prev,diff:L=>L.act-L.planYTD,pc:L=>Math.abs(L.planYTD)>=0.005?(L.act-L.planYTD)/Math.abs(L.planYTD):-1e9,dev:L=>L.dev??-1e9};
   if(st.sortK){const f=keyf[st.sortK];rows.sort((a,b)=>{const x=f(a),y=f(b);return (x>y?1:x<y?-1:0)*st.sortD;});}
   else rows.sort((a,b)=>(CATS.findIndex(c=>c[0]===a.p)-CATS.findIndex(c=>c[0]===b.p))||a.acc.localeCompare(b.acc));
   const th=(k,l,cl='s')=>`<th class="${cl}${k==='acc'||k==='name'||k==='p'||k==='dev'?' l':''}" data-k="${k}">${l}${st.sortK===k?(st.sortD>0?' ▲':' ▼'):''}</th>`;
-  let h=`<table><thead><tr>${th('acc','รหัสบัญชี')}${th('name','ชื่อบัญชี')}${th('p','หมวด')}${th('plan','แผนทั้งปี')}${th('planYTD','แผนสะสม')}${th('act','ผลสะสม')}${th('mon','ผลเดือน'+MSHORT[st.month])}${th('diff','ผลต่าง')}${th('pc','% แผนสะสม')}<th class="l">ผลเทียบแผน</th>${th('dev','สถานะ')}</tr></thead><tbody>`;
+  let h=`<table><thead><tr>${th('acc','รหัสบัญชี')}${th('name','ชื่อบัญชี')}${th('p','หมวด')}${th('plan','แผนทั้งปี')}${th('planYTD','แผนสะสม')}${th('act','ผลสะสม')}${th('mon','ผลเดือน'+MSHORT[st.month])}${th('diff','ผลต่าง')}${th('pc','ผลต่างจากเป้า (%)')}<th class="l">ผลเทียบแผน</th>${th('dev','สถานะ')}</tr></thead><tbody>`;
   let sP=0,sY=0,sA=0,sM=0;
   rows.forEach(L=>{sP+=L.plan;sY+=L.planYTD;sA+=L.act;sM+=L.act-L.prev;
-    h+=`<tr><td class="l code">${L.acc}</td><td class="l name">${esc(L.name)}</td><td class="l code">${L.p||'<span class="pill warn">ไม่มีรหัส</span>'}</td><td${numCls(L.plan)}>${fmt(L.plan)}</td><td${numCls(L.planYTD)}>${fmt(L.planYTD)}</td><td${numCls(L.act)}>${fmt2(L.act)}</td><td${numCls(L.act-L.prev)}>${fmt2(L.act-L.prev)}</td><td${numCls(L.act-L.planYTD)}>${fmt(L.act-L.planYTD)}</td><td>${pct(L.planYTD?L.act/L.planYTD:null)}</td><td class="l">${prog(L.planYTD,L.act)}</td><td class="l">${pill(L)}</td></tr>`;});
+    h+=`<tr><td class="l code">${L.acc}</td><td class="l name">${esc(L.name)}</td><td class="l code">${L.p||'<span class="pill warn">ไม่มีรหัส</span>'}</td><td${numCls(L.plan)}>${fmt(L.plan)}</td><td${numCls(L.planYTD)}>${fmt(L.planYTD)}</td><td${numCls(L.act)}>${fmt2(L.act)}</td><td${numCls(L.act-L.prev)}>${fmt2(L.act-L.prev)}</td><td${numCls(L.act-L.planYTD)}>${fmt(L.act-L.planYTD)}</td><td>${dvp(L.planYTD,L.act,L.kind)}</td><td class="l">${prog(L.planYTD,L.act)}</td><td class="l">${pill(L)}</td></tr>`;});
   if(!rows.length) h+=`<tr><td colspan="11" class="empty">ไม่พบบรรทัดตามเงื่อนไข</td></tr>`;
-  else h+=`<tr class="tot"><td class="l" colspan="3">รวม ${rows.length} บรรทัด${st.type==='all'&&!st.cat?' (รายได้และค่าใช้จ่ายปนกัน)':''}</td><td>${fmt(sP)}</td><td>${fmt(sY)}</td><td>${fmt2(sA)}</td><td>${fmt2(sM)}</td><td>${fmt(sA-sY)}</td><td>${pct(sY?sA/sY:null)}</td><td></td><td></td></tr>`;
+  else h+=`<tr class="tot"><td class="l" colspan="3">รวม ${rows.length} บรรทัด${st.type==='all'&&!st.cat?' (รายได้และค่าใช้จ่ายปนกัน)':''}</td><td>${fmt(sP)}</td><td>${fmt(sY)}</td><td>${fmt2(sA)}</td><td>${fmt2(sM)}</td><td>${fmt(sA-sY)}</td><td>${st.type==='all'&&!st.cat?'–':dvp(sY,sA,st.type==='exp'||(st.cat&&CAT[st.cat]&&CAT[st.cat].kind==='exp')?'exp':'rev')}</td><td></td><td></td></tr>`;
   h+='</tbody></table>';
   $('tblLines').innerHTML=h;
   const cnt=s=>rows.filter(L=>L.st===s).length;
@@ -374,7 +388,7 @@ function renderTrend(){
   $('chTrend').innerHTML=s;
   $('chTrend').querySelectorAll('.hit').forEach(r=>{
     r.addEventListener('mousemove',e=>{const i=+r.dataset.i;const a=actC[i];
-      showTip(e,`<b>${MONTHS[i]}</b><br>ผลสะสม: ${a==null?'ยังไม่มีข้อมูล':fmt(a)+' บาท'}<br>แผนสะสม: ${fmt(planC[i])} บาท${a!=null&&planC[i]?'<br>% ของแผนสะสม: '+pct(a/planC[i]):''}`);});
+      showTip(e,`<b>${MONTHS[i]}</b><br>ผลสะสม: ${a==null?'ยังไม่มีข้อมูล':fmt(a)+' บาท'}<br>แผนสะสม: ${fmt(planC[i])} บาท${a!=null&&planC[i]?'<br>ผลต่างจากเป้า: '+dvp(planC[i],a,CAT[k].kind):''}`);});
     r.addEventListener('mouseleave',hideTip);
   });
   // monthly table
